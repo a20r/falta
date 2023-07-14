@@ -1,2 +1,2 @@
 # falta
-Falta is an elevated error package for Go
+Falta is a simple error package for Go
