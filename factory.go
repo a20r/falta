@@ -2,27 +2,9 @@ package falta
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"text/template"
 )
-
-var ErrCannotCheckInt = New[string]("cannot check int: {{.}}")
-var ErrIntIsNegative = New[int64]("int is negative: {{.}}")
-
-func checkInt(str string) error {
-	num, err := strconv.ParseInt(str, 10, 64)
-
-	if err != nil {
-		return ErrCannotCheckInt.New(str).Wrap(err)
-	}
-
-	if num < 0 {
-		return ErrIntIsNegative.New(num)
-	}
-
-	return nil
-}
 
 // Factory is an error factory.
 type Factory[T any] interface {
