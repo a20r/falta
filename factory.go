@@ -2,39 +2,73 @@ package falta
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"text/template"
 )
 
-type Fields map[string]any
+var ErrCannotCheckInt = New[string]("cannot check int: {{.}}")
+var ErrIntIsNegative = New[int64]("int is negative: {{.}}")
 
+func checkInt(str string) error {
+	num, err := strconv.ParseInt(str, 10, 64)
+
+	if err != nil {
+		return ErrCannotCheckInt.New(str).Wrap(err)
+	}
+
+	if num < 0 {
+		return ErrIntIsNegative.New(num)
+	}
+
+	return nil
+}
+
+// Factory is an error factory.
 type Factory[T any] interface {
-	New(vs ...T) error
+	New(vs ...T) Falta
 }
 
+// Falta is an error returned by the Factory
+type Falta struct {
+	error
+}
+
+func (f Falta) Wrap(err error) Falta {
+	return Falta{fmt.Errorf(f.error.Error()+": %w", f.error)}
+}
+
+// New creates a new Falta instance that construct errors by executing the provided template string on a struct
+// of the type provided.
 func New[T any](errFmt string) Factory[T] {
-	return newTmplFactory[T](errFmt)
+	return newTmplFalta[T](errFmt)
 }
 
+// Newf creates a new Falta instance that will construct errors using the printf format string provided.
 func Newf[T any](errFmt string) Factory[any] {
 	return newFmtFactory(errFmt)
 }
 
-type tmplFactory[T any] struct {
+// Fields is a convenience type for using Falta instances with maps.
+type Fields map[string]any
+
+type tmplFalta[T any] struct {
 	errFmt string
 	tmpl   *template.Template
 }
 
-func newTmplFactory[T any](errFmt string) tmplFactory[T] {
-	return tmplFactory[T]{
+func newTmplFalta[T any](errFmt string) tmplFalta[T] {
+	return tmplFalta[T]{
 		errFmt: errFmt,
 		tmpl:   template.Must(template.New("tmplFactoryFmt").Parse(errFmt)),
 	}
 }
 
-func (f tmplFactory[T]) New(vs ...T) error {
+// New constructs a new error by executing the Falta's template with the struct provided. It panics if the template
+// returns an error with it executes.
+func (f tmplFalta[T]) New(vs ...T) Falta {
 	if len(vs) == 0 {
-		return f
+		return Falta{f}
 	}
 
 	builder := new(strings.Builder)
@@ -43,36 +77,31 @@ func (f tmplFactory[T]) New(vs ...T) error {
 		panic(err)
 	}
 
-	return fmt.Errorf(builder.String())
+	return Falta{fmt.Errorf(builder.String())}
 }
 
-func (f tmplFactory[T]) Error() string {
+func (f tmplFalta[T]) Error() string {
 	return f.errFmt
 }
 
-type fmtFactory struct {
+type fmtFalta struct {
 	errFmt string
-	parent error
 }
 
-func newFmtFactory(errFmt string) fmtFactory {
-	return fmtFactory{
+func newFmtFactory(errFmt string) fmtFalta {
+	return fmtFalta{
 		errFmt: errFmt,
 	}
 }
 
-func (f fmtFactory) New(vs ...any) error {
+func (f fmtFalta) New(vs ...any) Falta {
 	if len(vs) == 0 {
-		return f
+		return Falta{f}
 	}
 
-	if f.parent != nil {
-		return fmt.Errorf(f.errFmt+": %w", append(vs, f.parent)...)
-	}
-
-	return fmt.Errorf(f.errFmt, vs...)
+	return Falta{fmt.Errorf(f.errFmt, vs...)}
 }
 
-func (f fmtFactory) Error() string {
+func (f fmtFalta) Error() string {
 	return f.errFmt
 }
