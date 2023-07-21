@@ -28,7 +28,7 @@ func New[T any](errFmt string) Factory[T] {
 }
 
 // Newf creates a new Falta instance that will construct errors using the printf format string provided.
-func Newf[T any](errFmt string) Factory[any] {
+func Newf(errFmt string) Factory[any] {
 	return newFmtFactory(errFmt)
 }
 
