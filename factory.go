@@ -1,6 +1,7 @@
 package falta
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"text/template"
@@ -13,11 +14,17 @@ type Factory[T any] interface {
 
 // Falta is an error returned by the Factory
 type Falta struct {
+	errFmt string
 	error
 }
 
 func (f Falta) Wrap(err error) Falta {
-	return Falta{fmt.Errorf(f.error.Error()+": %w", f.error)}
+	return Falta{errFmt: f.errFmt, error: fmt.Errorf(f.error.Error()+": %w", f.error)}
+}
+
+func (f Falta) Is(err error) bool {
+	other := Falta{}
+	return errors.As(err, &other) && other.errFmt == f.errFmt
 }
 
 // New creates a new Falta instance that construct errors by executing the provided template string on a struct
@@ -50,7 +57,7 @@ func newTmplFalta[T any](errFmt string) tmplFalta[T] {
 // returns an error with it executes.
 func (f tmplFalta[T]) New(vs ...T) Falta {
 	if len(vs) == 0 {
-		return Falta{f}
+		return Falta{errFmt: f.errFmt, error: f}
 	}
 
 	builder := new(strings.Builder)
@@ -59,7 +66,7 @@ func (f tmplFalta[T]) New(vs ...T) Falta {
 		panic(err)
 	}
 
-	return Falta{fmt.Errorf(builder.String())}
+	return Falta{errFmt: f.errFmt, error: fmt.Errorf(builder.String())}
 }
 
 func (f tmplFalta[T]) Error() string {
@@ -78,10 +85,10 @@ func newFmtFactory(errFmt string) fmtFalta {
 
 func (f fmtFalta) New(vs ...any) Falta {
 	if len(vs) == 0 {
-		return Falta{f}
+		return Falta{errFmt: f.errFmt, error: f}
 	}
 
-	return Falta{fmt.Errorf(f.errFmt, vs...)}
+	return Falta{errFmt: f.errFmt, error: fmt.Errorf(f.errFmt, vs...)}
 }
 
 func (f fmtFalta) Error() string {
