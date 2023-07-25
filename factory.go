@@ -20,7 +20,7 @@ type Falta struct {
 
 // Wrap wraps the error provided with the Falta instance.
 func (f Falta) Wrap(err error) Falta {
-	return Falta{errFmt: f.errFmt, error: fmt.Errorf(f.error.Error()+": %w", f.error)}
+	return Falta{errFmt: f.errFmt, error: fmt.Errorf(f.error.Error()+": %w", err)}
 }
 
 // Is returns true if the error provided is a Falta instance created by the same factory.
