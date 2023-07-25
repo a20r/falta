@@ -18,6 +18,7 @@ type Falta struct {
 	error
 }
 
+// Wrap wraps the error provided with the Falta instance.
 func (f Falta) Wrap(err error) Falta {
 	return Falta{errFmt: f.errFmt, error: fmt.Errorf(f.error.Error()+": %w", f.error)}
 }
@@ -34,7 +35,7 @@ func New[T any](errFmt string) Factory[T] {
 }
 
 // Newf creates a new Falta instance that will construct errors using the printf format string provided.
-func Newf[T any](errFmt string) Factory[any] {
+func Newf(errFmt string) Factory[any] {
 	return newFmtFactory(errFmt)
 }
 
