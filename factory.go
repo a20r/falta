@@ -23,6 +23,7 @@ func (f Falta) Wrap(err error) Falta {
 	return Falta{errFmt: f.errFmt, error: fmt.Errorf(f.error.Error()+": %w", f.error)}
 }
 
+// Is returns true if the error provided is a Falta instance created by the same factory.
 func (f Falta) Is(err error) bool {
 	other := Falta{}
 	return errors.As(err, &other) && other.errFmt == f.errFmt
