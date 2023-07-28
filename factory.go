@@ -14,17 +14,27 @@ type Factory[T any] interface {
 
 // Falta is an error returned by the Factory
 type Falta struct {
-	errFmt string
+	errFmt     string
+	wrappedErr error
 	error
 }
 
 // Wrap wraps the error provided with the Falta instance.
 func (f Falta) Wrap(err error) Falta {
-	return Falta{errFmt: f.errFmt, error: fmt.Errorf(f.error.Error()+": %w", err)}
+	return Falta{errFmt: f.errFmt, error: fmt.Errorf(f.error.Error()+": %w", err), wrappedErr: err}
+}
+
+// Unwrap returns the wrapped error if there is one.
+func (f Falta) Unwrap() error {
+	return f.wrappedErr
 }
 
 // Is returns true if the error provided is a Falta instance created by the same factory.
 func (f Falta) Is(err error) bool {
+	if f.wrappedErr != nil && errors.Is(err, f.wrappedErr) {
+		return true
+	}
+
 	other := Falta{}
 	return errors.As(err, &other) && other.errFmt == f.errFmt
 }
