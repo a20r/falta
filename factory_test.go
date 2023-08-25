@@ -59,6 +59,19 @@ func TestFactory_fmtFactory(t *testing.T) {
 					ctx.As.ErrorIs(err, wrappedErr)
 				},
 			},
+			{
+				Name:   "Check annotation",
+				Fields: "test error: %s is %s",
+				Input:  []any{"cat", "brown"},
+
+				Check: func(ctx *mesa.Ctx, inst falta.Factory[any], in []any, out error) {
+					wrappedErr := fmt.Errorf("wrapped error")
+					err := inst.New("elon", "dumb").Annotate("he really is").Wrap(wrappedErr)
+					ctx.As.ErrorIs(out, err)
+					ctx.As.ErrorIs(err, wrappedErr)
+					ctx.As.Equal("test error: elon is dumb: he really is: "+wrappedErr.Error(), err.Error())
+				},
+			},
 		},
 	}
 
