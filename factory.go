@@ -21,7 +21,15 @@ type Falta struct {
 
 // Wrap wraps the error provided with the Falta instance.
 func (f Falta) Wrap(err error) Falta {
-	return Falta{errFmt: f.errFmt, error: fmt.Errorf(f.error.Error()+": %w", err), wrappedErr: err}
+	f.error = fmt.Errorf("%s: %w", f.error.Error(), err)
+	f.wrappedErr = err
+	return f
+}
+
+// Annotate adds an annotation to the error to provide more context to why it's happening
+func (f Falta) Annotate(annotation string) Falta {
+	f.error = fmt.Errorf("%s: %s", f.error.Error(), annotation)
+	return f
 }
 
 // Unwrap returns the wrapped error if there is one.
