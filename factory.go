@@ -9,6 +9,7 @@ import (
 
 // Factory is an error factory.
 type Factory[T any] interface {
+	error
 	New(vs ...T) Falta
 }
 
