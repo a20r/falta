@@ -45,7 +45,7 @@ func (f Falta) Is(err error) bool {
 	}
 
 	other := Falta{}
-	return errors.As(err, &other) && other.errFmt == f.errFmt
+	return errors.As(err, &other) && other.errFmt == f.errFmt || f.Error() == f.errFmt
 }
 
 // New creates a new Falta instance that construct errors by executing the provided template string on a struct
