@@ -72,6 +72,18 @@ func TestFactory_fmtFactory(t *testing.T) {
 					ctx.As.Equal("test error: elon is dumb: he really is: "+wrappedErr.Error(), err.Error())
 				},
 			},
+			{
+				Name:   "Check if factory errors.Is the new error",
+				Fields: "test error: %s is %s",
+				Input:  []any{"cat", "brown"},
+
+				Check: func(ctx *mesa.Ctx, inst falta.Factory[any], in []any, out error) {
+					ctx.As.ErrorIs(out, inst)
+					ctx.As.ErrorIs(inst, out)
+					ctx.As.ErrorIs(inst, inst)
+					ctx.As.ErrorIs(out, out)
+				},
+			},
 		},
 	}
 

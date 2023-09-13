@@ -45,7 +45,7 @@ func (f Falta) Is(err error) bool {
 	}
 
 	other := Falta{}
-	return errors.As(err, &other) && other.errFmt == f.errFmt || f.Error() == f.errFmt
+	return errors.As(err, &other) && other.errFmt == f.errFmt || err.Error() == f.errFmt
 }
 
 // New creates a new Falta instance that construct errors by executing the provided template string on a struct
@@ -94,6 +94,11 @@ func (f tmplFalta[T]) Error() string {
 	return f.errFmt
 }
 
+func (f tmplFalta[T]) Is(err error) bool {
+	other := Falta{}
+	return errors.As(err, &other) && other.errFmt == f.errFmt || err.Error() == f.errFmt
+}
+
 type fmtFalta struct {
 	errFmt string
 }
@@ -114,4 +119,9 @@ func (f fmtFalta) New(vs ...any) Falta {
 
 func (f fmtFalta) Error() string {
 	return f.errFmt
+}
+
+func (f fmtFalta) Is(err error) bool {
+	other := Falta{}
+	return errors.As(err, &other) && other.errFmt == f.errFmt || err.Error() == f.errFmt
 }
