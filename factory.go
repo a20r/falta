@@ -48,6 +48,10 @@ func (f Falta) Is(err error) bool {
 	return errors.As(err, &other) && other.errFmt == f.errFmt || err.Error() == f.errFmt
 }
 
+// Capture captures the error provided and wraps it with the Falta instance if it's not nil. This should be called
+// with defer at the top of the function for which you are trying to capture the error. This ensures that all errors
+// returned from your function will be wrapped by the function passed into Capture. You should use a named return
+// value for the error so that the error Capture wraps is the one returned from teh function.
 func (f Falta) Capture(err *error) {
 	if *err != nil {
 		*err = f.Wrap(*err)
