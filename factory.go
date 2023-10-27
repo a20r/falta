@@ -48,6 +48,12 @@ func (f Falta) Is(err error) bool {
 	return errors.As(err, &other) && other.errFmt == f.errFmt || err.Error() == f.errFmt
 }
 
+func (f Falta) Capture(err *error) {
+	if *err != nil {
+		*err = f.Wrap(*err)
+	}
+}
+
 // New creates a new Falta instance that construct errors by executing the provided template string on a struct
 // of the type provided.
 func New[T any](errFmt string) Factory[T] {

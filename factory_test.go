@@ -2,10 +2,12 @@ package falta_test
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/a20r/falta"
 	"github.com/a20r/mesa"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFactory_fmtFactory(t *testing.T) {
@@ -88,4 +90,27 @@ func TestFactory_fmtFactory(t *testing.T) {
 	}
 
 	table.Run(t)
+}
+
+func TestCapture(t *testing.T) {
+	as := assert.New(t)
+
+	errCannotOpenFile := falta.Newf(`open: cannot open file %s`)
+
+	open := func(name string) (file *os.File, err error) {
+		defer errCannotOpenFile.New(name).Capture(&err)
+
+		f, err := os.Open(name)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return f, nil
+	}
+
+	_, err := open("does-not-exist.txt")
+	t.Log(err)
+
+	as.ErrorIs(err, errCannotOpenFile)
 }
