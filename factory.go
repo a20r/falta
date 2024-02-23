@@ -20,6 +20,13 @@ type Falta struct {
 	error
 }
 
+func NewError(msg string) Falta {
+	return Falta{
+		errFmt: msg,
+		error:  fmt.Errorf(msg),
+	}
+}
+
 // Wrap wraps the error provided with the Falta instance.
 func (f Falta) Wrap(err error) Falta {
 	f.error = fmt.Errorf("%s: %w", f.error.Error(), err)

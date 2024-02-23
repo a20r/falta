@@ -114,3 +114,10 @@ func TestCapture(t *testing.T) {
 
 	as.ErrorIs(err, errCannotOpenFile)
 }
+
+func TestNewError(t *testing.T) {
+	err := falta.NewError("falta test: test error")
+	wrappedErr := fmt.Errorf("wrapped error: %w", err)
+	as := assert.New(t)
+	as.ErrorIs(wrappedErr, err)
+}
