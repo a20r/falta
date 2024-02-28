@@ -1,0 +1,4 @@
+{
+    "go.testExplorer.showDynamicSubtestsInEditor": true,
+    "go.testEnvVars": {}
+}

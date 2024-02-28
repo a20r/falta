@@ -121,3 +121,14 @@ func TestNewError(t *testing.T) {
 	as := assert.New(t)
 	as.ErrorIs(wrappedErr, err)
 }
+
+func TestNewM(t *testing.T) {
+	f := falta.NewM("falta test: [code={{.code}}] test error with message: {{.message}}")
+	err := f.New(falta.M{
+		"code":    503,
+		"message": "Bad Gateway",
+	})
+
+	expectedErr := fmt.Errorf("falta test: [code=503] test error with message: Bad Gateway")
+	assert.ErrorIs(t, err, expectedErr)
+}

@@ -3,6 +3,7 @@ package falta
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"text/template"
 )
@@ -20,7 +21,12 @@ type Falta struct {
 	error
 }
 
+// NewError returns a new Falta error type with the provided error string.
+//
+// NOTE (a20r, 2024-02-25): It panics if the provided message contains any fmt verbs.
 func NewError(msg string) Falta {
+	panicIfStringHasVerbs(msg)
+
 	return Falta{
 		errFmt: msg,
 		error:  fmt.Errorf(msg),
@@ -35,7 +41,11 @@ func (f Falta) Wrap(err error) Falta {
 }
 
 // Annotate adds an annotation to the error to provide more context to why it's happening
+//
+// NOTE (a20r, 2024-02-25): It panics if the provided annotation contains any fmt verbs.
 func (f Falta) Annotate(annotation string) Falta {
+	panicIfStringHasVerbs(annotation)
+
 	f.error = fmt.Errorf("%s: %s", f.error.Error(), annotation)
 	return f
 }
@@ -52,7 +62,10 @@ func (f Falta) Is(err error) bool {
 	}
 
 	other := Falta{}
-	return errors.As(err, &other) && other.errFmt == f.errFmt || err.Error() == f.errFmt
+	errAs := errors.As(err, &other) && other.errFmt == f.errFmt
+	errFmtEq := err.Error() == f.errFmt
+	errValueEq := err.Error() == f.Error()
+	return errAs || errFmtEq || errValueEq
 }
 
 // Capture captures the error provided and wraps it with the Falta instance if it's not nil. This should be called
@@ -65,10 +78,35 @@ func (f Falta) Capture(err *error) {
 	}
 }
 
+var verbsRegex *regexp.Regexp
+
+func init() {
+	const verbsRegexStr = `\%\w`
+	re, err := regexp.Compile(verbsRegexStr)
+
+	if err != nil {
+		panic(fmt.Errorf("falta: cannot compile verbs regex: %w", err))
+	}
+
+	verbsRegex = re
+}
+
+func panicIfStringHasVerbs(msg string) {
+	if verbsRegex.MatchString(msg) {
+		panic(fmt.Errorf(`falta: string "%s" has verbs`, msg))
+	}
+}
+
 // New creates a new Falta instance that construct errors by executing the provided template string on a struct
 // of the type provided.
 func New[T any](errFmt string) Factory[T] {
 	return newTmplFalta[T](errFmt)
+}
+
+// NewM returns a new Falta instance using a template that expects a falta.M (i.e., map[string]any). This is a
+// convenience function for calling falta.New[falta.M](...)
+func NewM(errFmt string) Factory[M] {
+	return New[M](errFmt)
 }
 
 // Newf creates a new Falta instance that will construct errors using the printf format string provided.
@@ -76,8 +114,8 @@ func Newf(errFmt string) Factory[any] {
 	return newFmtFactory(errFmt)
 }
 
-// Fields is a convenience type for using Falta instances with maps.
-type Fields map[string]any
+// M is a convenience type for using Falta instances with maps.
+type M map[string]any
 
 type tmplFalta[T any] struct {
 	errFmt string
@@ -113,7 +151,10 @@ func (f tmplFalta[T]) Error() string {
 
 func (f tmplFalta[T]) Is(err error) bool {
 	other := Falta{}
-	return errors.As(err, &other) && other.errFmt == f.errFmt || err.Error() == f.errFmt
+	errAs := errors.As(err, &other) && other.errFmt == f.errFmt
+	errFmtEq := err.Error() == f.errFmt
+	errValueEq := err.Error() == f.Error()
+	return errAs || errFmtEq || errValueEq
 }
 
 type fmtFalta struct {
@@ -140,5 +181,8 @@ func (f fmtFalta) Error() string {
 
 func (f fmtFalta) Is(err error) bool {
 	other := Falta{}
-	return errors.As(err, &other) && other.errFmt == f.errFmt || err.Error() == f.errFmt
+	errAs := errors.As(err, &other) && other.errFmt == f.errFmt
+	errFmtEq := err.Error() == f.errFmt
+	errValueEq := err.Error() == f.Error()
+	return errAs || errFmtEq || errValueEq
 }
