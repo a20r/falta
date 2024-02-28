@@ -14,6 +14,12 @@ type Factory[T any] interface {
 	New(vs ...T) Falta
 }
 
+// ExtendableFactory is an error factory that can be extended.
+type ExtendableFactory[T any] interface {
+	Factory[T]
+	Extend(f Factory[T]) ExtendableFactory[T]
+}
+
 // Falta is an error returned by the Factory
 type Falta struct {
 	errFmt     string
@@ -103,19 +109,19 @@ func New[T any](errFmt string) Factory[T] {
 	return newTmplFalta[T](errFmt)
 }
 
-// NewM returns a new Falta instance using a template that expects a falta.M (i.e., map[string]any). This is a
-// convenience function for calling falta.New[falta.M](...)
-func NewM(errFmt string) Factory[M] {
-	return New[M](errFmt)
+// M is a convenience type for using Falta instances with maps.
+type M map[string]any
+
+// NewM returns a new ExtendableFactory instance using a template that expects a falta.M (i.e., map[string]any).
+// This is a convenience function for calling falta.New[falta.M](...)
+func NewM(errFmt string) ExtendableFactory[M] {
+	return newTmplFalta[M](errFmt)
 }
 
 // Newf creates a new Falta instance that will construct errors using the printf format string provided.
-func Newf(errFmt string) Factory[any] {
+func Newf(errFmt string) ExtendableFactory[any] {
 	return newFmtFactory(errFmt)
 }
-
-// M is a convenience type for using Falta instances with maps.
-type M map[string]any
 
 type tmplFalta[T any] struct {
 	errFmt string
@@ -139,10 +145,20 @@ func (f tmplFalta[T]) New(vs ...T) Falta {
 	builder := new(strings.Builder)
 
 	if err := f.tmpl.Execute(builder, vs[0]); err != nil {
-		panic(err)
+		panic(fmt.Errorf("falta: cannot execute template: %w", err))
 	}
 
 	return Falta{errFmt: f.errFmt, error: fmt.Errorf(builder.String())}
+}
+
+func (f tmplFalta[T]) Extend(other Factory[T]) ExtendableFactory[T] {
+	v, ok := other.(tmplFalta[T])
+
+	if !ok {
+		panic(fmt.Errorf("falta: tmpl factories can only be extended by other tmpl factories with the same type"))
+	}
+
+	return newTmplFalta[T](f.errFmt + " " + v.errFmt)
 }
 
 func (f tmplFalta[T]) Error() string {
@@ -173,6 +189,16 @@ func (f fmtFalta) New(vs ...any) Falta {
 	}
 
 	return Falta{errFmt: f.errFmt, error: fmt.Errorf(f.errFmt, vs...)}
+}
+
+func (f fmtFalta) Extend(other Factory[any]) ExtendableFactory[any] {
+	v, ok := other.(fmtFalta)
+
+	if !ok {
+		panic(fmt.Errorf("falta: fmt factories can only be extended by other fmt factories"))
+	}
+
+	return newFmtFactory(f.errFmt + " " + v.errFmt)
 }
 
 func (f fmtFalta) Error() string {

@@ -123,12 +123,41 @@ func TestNewError(t *testing.T) {
 }
 
 func TestNewM(t *testing.T) {
-	f := falta.NewM("falta test: [code={{.code}}] test error with message: {{.message}}")
+	f := falta.NewM("falta test: [code={{.code}}] test error with message '{{.message}}'")
+
 	err := f.New(falta.M{
 		"code":    503,
 		"message": "Bad Gateway",
 	})
 
-	expectedErr := fmt.Errorf("falta test: [code=503] test error with message: Bad Gateway")
+	expectedErr := fmt.Errorf("falta test: [code=503] test error with message 'Bad Gateway'")
 	assert.ErrorIs(t, err, expectedErr)
+}
+
+func TestExtendableFactory(t *testing.T) {
+	ErrCallFailed := falta.NewM("falta test: [code={{.code}}] test error with message '{{.message}}'")
+	ErrCallFailedWithReason := ErrCallFailed.Extend(falta.NewM("because {{.reason}}"))
+
+	as := assert.New(t)
+
+	{
+		err := ErrCallFailed.New(falta.M{
+			"code":    503,
+			"message": "Bad Gateway",
+		})
+
+		expectedErr := fmt.Errorf("falta test: [code=503] test error with message 'Bad Gateway'")
+		as.ErrorIs(err, expectedErr)
+	}
+
+	{
+		err := ErrCallFailedWithReason.New(falta.M{
+			"code":    503,
+			"message": "Bad Gateway",
+			"reason":  "server is down",
+		})
+
+		expectedErr := fmt.Errorf("falta test: [code=503] test error with message 'Bad Gateway' because server is down")
+		as.ErrorIs(err, expectedErr)
+	}
 }
