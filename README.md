@@ -267,13 +267,16 @@ Factories implement `error` themselves, which is why they can be passed straight
 ## Development
 
 ```sh
-go test -race ./...   # tests
-golangci-lint run     # lint (config in .golangci.yml)
-go mod tidy           # deps
+go test -race -cover ./...   # tests (statement coverage is currently 98.3%)
+golangci-lint run            # lint (config in .golangci.yml)
+go mod tidy                  # deps
 ```
 
-CI runs the same three gates on every pull request and on `main`, against the oldest supported
-Go release and the current one. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+CI runs the same gates on every pull request and on `main`, against the oldest supported Go
+release and the current one, and fails any run whose statement coverage drops below 95%. The
+suite includes an `errors.Is` truth table, fuzz targets for the construction invariants, a
+race-detector concurrency test, and runnable examples for every constructor. See
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ## License
 

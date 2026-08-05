@@ -14,6 +14,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
+env:
+  # Minimum statement coverage. The suite currently sits at 98.3%; the only
+  # uncovered statements are unreachable (init's regex-compile panic branch).
+  COVERAGE_GATE: '95'
+
 jobs:
   test:
     name: test (go ${{ matrix.go }})
@@ -39,8 +44,28 @@ jobs:
       - name: Test
         run: go test -race -covermode=atomic -coverprofile=coverage.out -v ./...
 
-      - name: Coverage summary
-        run: go tool cover -func=coverage.out | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Coverage report and gate
+        run: |
+          go tool cover -func=coverage.out | tee -a "$GITHUB_STEP_SUMMARY"
+          go tool cover -html=coverage.out -o coverage.html
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {sub(/%/, "", $3); print $3}')
+          echo "Total coverage: ${total}% (gate: ${COVERAGE_GATE}%)"
+          awk -v total="$total" -v gate="$COVERAGE_GATE" 'BEGIN {
+            if (total + 0 < gate + 0) {
+              printf "FAIL: coverage %.1f%% is below the %.1f%% gate\n", total, gate
+              exit 1
+            }
+          }'
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-go-${{ matrix.go }}
+          path: |
+            coverage.out
+            coverage.html
+          if-no-files-found: ignore
 
   lint:
     name: lint
