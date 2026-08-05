@@ -199,6 +199,30 @@ func TestFalta_Unwrap(t *testing.T) {
 	})
 }
 
+// TestLiteralMessages locks in that messages are never run back through a printf interpreter at construction time:
+// NewError and the template factories build their errors with errors.New, so '%' sequences that are not caught by the
+// verb guard survive untouched. Only Newf formats, and only when arguments are passed.
+func TestLiteralMessages(t *testing.T) {
+	t.Run("NewError keeps non-verb percent sequences", func(t *testing.T) {
+		assert.EqualError(t, falta.NewError("50%% done"), "50%% done")
+		assert.EqualError(t, falta.NewError("50% done"), "50% done")
+	})
+
+	t.Run("Annotations stay literal", func(t *testing.T) {
+		err := falta.NewError("db: down").Annotate("at 50%% capacity")
+		assert.EqualError(t, err, "db: down: at 50%% capacity")
+	})
+
+	t.Run("Template factories keep percents from data", func(t *testing.T) {
+		f := falta.NewM("falta test: value {{.v}}")
+		assert.EqualError(t, f.New(falta.M{"v": "100%s"}), "falta test: value 100%s")
+	})
+
+	t.Run("Newf formats verbs when args are passed", func(t *testing.T) {
+		assert.EqualError(t, falta.Newf("%d%% done").New(50), "50% done")
+	})
+}
+
 func TestNewM(t *testing.T) {
 	f := falta.NewM("falta test: [code={{.code}}] test error with message '{{.message}}'")
 
