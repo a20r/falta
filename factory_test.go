@@ -199,6 +199,66 @@ func TestFalta_Unwrap(t *testing.T) {
 	})
 }
 
+// TestDeepWrapping locks in that errors.Is keeps matching every layer no matter how many times an error is wrapped —
+// through falta factories wrapping other falta errors, plain fmt.Errorf %w wrapping on top, and nested Captures.
+func TestDeepWrapping(t *testing.T) {
+	t.Run("errors.Is matches every layer of a mixed chain", func(t *testing.T) {
+		root := errors.New("root cause")
+		errQuery := falta.Newf("query failed for %s")
+		errDB := falta.NewError("db: unavailable")
+
+		err := fmt.Errorf("request aborted: %w", errDB.Wrap(errQuery.New("users").Wrap(root)))
+
+		assert.ErrorIs(t, err, root)
+		assert.ErrorIs(t, err, errQuery)
+		assert.ErrorIs(t, err, errDB)
+		assert.EqualError(t, err, "request aborted: db: unavailable: query failed for users: root cause")
+
+		var f falta.Falta
+		assert.ErrorAs(t, err, &f)
+	})
+
+	t.Run("factories stay matchable through many layers of wrapping", func(t *testing.T) {
+		root := errors.New("root cause")
+		factories := make([]falta.ExtendableFactory[any], 5)
+
+		err := error(root)
+
+		for i := range factories {
+			factories[i] = falta.Newf(fmt.Sprintf("layer %d: %%s", i))
+			err = factories[i].New("ctx").Wrap(err)
+		}
+
+		assert.ErrorIs(t, err, root)
+
+		for _, factory := range factories {
+			assert.ErrorIs(t, err, factory)
+		}
+	})
+
+	t.Run("nested Captures keep the whole chain matchable", func(t *testing.T) {
+		root := errors.New("file corrupt")
+		errParse := falta.Newf("parse: cannot parse %s")
+		errLoad := falta.Newf("load: cannot load %s")
+
+		parse := func() (err error) {
+			defer errParse.New("cfg.yaml").Capture(&err)
+			return root
+		}
+
+		load := func() (err error) {
+			defer errLoad.New("app").Capture(&err)
+			return parse()
+		}
+
+		err := load()
+		assert.ErrorIs(t, err, root)
+		assert.ErrorIs(t, err, errParse)
+		assert.ErrorIs(t, err, errLoad)
+		assert.EqualError(t, err, "load: cannot load app: parse: cannot parse cfg.yaml: file corrupt")
+	})
+}
+
 // TestLiteralMessages locks in that messages are never run back through a printf interpreter at construction time:
 // NewError and the template factories build their errors with errors.New, so '%' sequences that are not caught by the
 // verb guard survive untouched. Only Newf formats, and only when arguments are passed.
