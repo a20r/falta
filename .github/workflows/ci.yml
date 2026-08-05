@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Only keep the newest run for a given PR/branch in flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Minimum statement coverage. The suite currently sits at 98.3%; the only
+  # uncovered statements are unreachable (init's regex-compile panic branch).
+  COVERAGE_GATE: '95'
+
+jobs:
+  test:
+    name: test (go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest version falta supports (see go.mod) plus the current release.
+        go: ['1.21', 'stable']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race -covermode=atomic -coverprofile=coverage.out -v ./...
+
+      - name: Coverage report and gate
+        run: |
+          go tool cover -func=coverage.out | tee -a "$GITHUB_STEP_SUMMARY"
+          go tool cover -html=coverage.out -o coverage.html
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {sub(/%/, "", $3); print $3}')
+          echo "Total coverage: ${total}% (gate: ${COVERAGE_GATE}%)"
+          awk -v total="$total" -v gate="$COVERAGE_GATE" 'BEGIN {
+            if (total + 0 < gate + 0) {
+              printf "FAIL: coverage %.1f%% is below the %.1f%% gate\n", total, gate
+              exit 1
+            }
+          }'
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-go-${{ matrix.go }}
+          path: |
+            coverage.out
+            coverage.html
+          if-no-files-found: ignore
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # golangci-lint type-checks with the go/types from the toolchain it was
+      # built with, so it cannot analyze a stdlib newer than that. Pin the Go
+      # minor version to match the linter's, rather than tracking `stable` and
+      # breaking on the next Go release. Bump both together.
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: false
+
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2 # built with go1.26
+
+  tidy:
+    name: tidy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go mod tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum

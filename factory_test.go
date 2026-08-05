@@ -1,100 +1,138 @@
 package falta_test
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"testing"
 
 	"github.com/a20r/falta"
-	"github.com/a20r/mesa"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestFactory_fmtFactory(t *testing.T) {
-	table := mesa.MethodMesa[falta.Factory[any], string, []any, error]{
-		NewInstance: func(ctx *mesa.Ctx, errFmt string) falta.Factory[any] {
-			return falta.Newf(errFmt)
+func TestNewf(t *testing.T) {
+	tests := []struct {
+		name  string
+		fmt   string
+		input []any
+		check func(t *testing.T, factory falta.Factory[any], input []any, out falta.Falta)
+	}{
+		{
+			name:  "Return new error with params",
+			fmt:   "test error: the %s is %s",
+			input: []any{"dog", "black"},
+
+			check: func(t *testing.T, _ falta.Factory[any], input []any, out falta.Falta) {
+				assert.EqualError(t, out, fmt.Sprintf("test error: the %s is %s", input...))
+			},
 		},
+		{
+			name:  "Return new error without params",
+			fmt:   "test error",
+			input: []any{},
 
-		Target: func(ctx *mesa.Ctx, inst falta.Factory[any], in []any) error {
-			return inst.New(in...)
+			check: func(t *testing.T, _ falta.Factory[any], _ []any, out falta.Falta) {
+				assert.EqualError(t, out, "test error")
+			},
 		},
+		{
+			name:  "Check if error Is the same",
+			fmt:   "test error: %s is %s",
+			input: []any{"cat", "brown"},
 
-		Cases: []mesa.MethodCase[falta.Factory[any], string, []any, error]{
-			{
-				Name:   "Return new error with params",
-				Fields: "test error: the %s is %s",
-				Input:  []any{"dog", "black"},
-
-				Check: func(ctx *mesa.Ctx, inst falta.Factory[any], in []any, out error) {
-					ctx.As.EqualError(out, fmt.Sprintf("test error: the %s is %s", in...))
-				},
+			check: func(t *testing.T, factory falta.Factory[any], _ []any, out falta.Falta) {
+				assert.ErrorIs(t, out, factory.New("elon", "dumb"))
 			},
-			{
-				Name:   "Return new error without params",
-				Fields: "test error",
-				Input:  []any{},
+		},
+		{
+			name:  "Check wrapped error",
+			fmt:   "test error: %s is %s",
+			input: []any{"cat", "brown"},
 
-				Check: func(ctx *mesa.Ctx, inst falta.Factory[any], in []any, out error) {
-					ctx.As.EqualError(out, "test error")
-				},
+			check: func(t *testing.T, factory falta.Factory[any], _ []any, out falta.Falta) {
+				wrappedErr := errors.New("wrapped error")
+				err := factory.New("elon", "dumb").Wrap(wrappedErr)
+				assert.ErrorIs(t, out, err)
+				assert.ErrorIs(t, err, wrappedErr)
 			},
-			{
-				Name:   "Check if error Is the same",
-				Fields: "test error: %s is %s",
-				Input:  []any{"cat", "brown"},
+		},
+		{
+			name:  "Check annotation",
+			fmt:   "test error: %s is %s",
+			input: []any{"cat", "brown"},
 
-				Check: func(ctx *mesa.Ctx, inst falta.Factory[any], in []any, out error) {
-					err := inst.New("elon", "dumb")
-					ctx.As.ErrorIs(out, err)
-				},
+			check: func(t *testing.T, factory falta.Factory[any], _ []any, out falta.Falta) {
+				wrappedErr := errors.New("wrapped error")
+				err := factory.New("elon", "dumb").Annotate("he really is").Wrap(wrappedErr)
+				assert.ErrorIs(t, out, err)
+				assert.ErrorIs(t, err, wrappedErr)
+				assert.EqualError(t, err, "test error: elon is dumb: he really is: "+wrappedErr.Error())
 			},
-			{
-				Name:   "Check wrapped error",
-				Fields: "test error: %s is %s",
-				Input:  []any{"cat", "brown"},
+		},
+		{
+			name:  "Check if factory errors.Is the new error",
+			fmt:   "test error: %s is %s",
+			input: []any{"cat", "brown"},
 
-				Check: func(ctx *mesa.Ctx, inst falta.Factory[any], in []any, out error) {
-					wrappedErr := fmt.Errorf("wrapped error")
-					err := inst.New("elon", "dumb").Wrap(wrappedErr)
-					ctx.As.ErrorIs(out, err)
-					ctx.As.ErrorIs(err, wrappedErr)
-				},
-			},
-			{
-				Name:   "Check annotation",
-				Fields: "test error: %s is %s",
-				Input:  []any{"cat", "brown"},
-
-				Check: func(ctx *mesa.Ctx, inst falta.Factory[any], in []any, out error) {
-					wrappedErr := fmt.Errorf("wrapped error")
-					err := inst.New("elon", "dumb").Annotate("he really is").Wrap(wrappedErr)
-					ctx.As.ErrorIs(out, err)
-					ctx.As.ErrorIs(err, wrappedErr)
-					ctx.As.Equal("test error: elon is dumb: he really is: "+wrappedErr.Error(), err.Error())
-				},
-			},
-			{
-				Name:   "Check if factory errors.Is the new error",
-				Fields: "test error: %s is %s",
-				Input:  []any{"cat", "brown"},
-
-				Check: func(ctx *mesa.Ctx, inst falta.Factory[any], in []any, out error) {
-					ctx.As.ErrorIs(out, inst)
-					ctx.As.ErrorIs(inst, out)
-					ctx.As.ErrorIs(inst, inst)
-					ctx.As.ErrorIs(out, out)
-				},
+			check: func(t *testing.T, factory falta.Factory[any], _ []any, out falta.Falta) {
+				assert.ErrorIs(t, out, factory)
+				assert.ErrorIs(t, factory, out)
+				assert.ErrorIs(t, factory, factory)
+				assert.ErrorIs(t, out, out)
 			},
 		},
 	}
 
-	table.Run(t)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			factory := falta.Newf(test.fmt)
+			test.check(t, factory, test.input, factory.New(test.input...))
+		})
+	}
+}
+
+func TestNew(t *testing.T) {
+	type circle struct {
+		Radius float64
+	}
+
+	tests := []struct {
+		name     string
+		fmt      string
+		input    []circle
+		expected string
+	}{
+		{
+			name:     "Renders the template with the value provided",
+			fmt:      "invalid circle: radius ({{.Radius}}) <= 0",
+			input:    []circle{{Radius: -1}},
+			expected: "invalid circle: radius (-1) <= 0",
+		},
+		{
+			name:     "Falls back to the template source when no value is provided",
+			fmt:      "invalid circle: radius ({{.Radius}}) <= 0",
+			input:    nil,
+			expected: "invalid circle: radius ({{.Radius}}) <= 0",
+		},
+		{
+			name:     "Only uses the first value provided",
+			fmt:      "invalid circle: radius ({{.Radius}}) <= 0",
+			input:    []circle{{Radius: -1}, {Radius: -2}},
+			expected: "invalid circle: radius (-1) <= 0",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			factory := falta.New[circle](test.fmt)
+			err := factory.New(test.input...)
+			assert.EqualError(t, err, test.expected)
+			assert.ErrorIs(t, err, factory)
+		})
+	}
 }
 
 func TestCapture(t *testing.T) {
-	as := assert.New(t)
-
 	errCannotOpenFile := falta.Newf(`open: cannot open file %s`)
 
 	open := func(name string) (file *os.File, err error) {
@@ -109,17 +147,140 @@ func TestCapture(t *testing.T) {
 		return f, nil
 	}
 
-	_, err := open("does-not-exist.txt")
-	t.Log(err)
+	t.Run("Wraps the error returned by the function", func(t *testing.T) {
+		_, err := open("does-not-exist.txt")
+		assert.ErrorIs(t, err, errCannotOpenFile)
+		assert.ErrorIs(t, err, os.ErrNotExist)
+	})
 
-	as.ErrorIs(err, errCannotOpenFile)
+	t.Run("Leaves a nil error alone", func(t *testing.T) {
+		f, err := open(os.DevNull)
+		assert.NoError(t, err)
+		assert.NoError(t, f.Close())
+	})
 }
 
 func TestNewError(t *testing.T) {
-	err := falta.NewError("falta test: test error")
-	wrappedErr := fmt.Errorf("wrapped error: %w", err)
-	as := assert.New(t)
-	as.ErrorIs(wrappedErr, err)
+	t.Run("Is found by errors.Is through a wrapping error", func(t *testing.T) {
+		err := falta.NewError("falta test: test error")
+		wrappedErr := fmt.Errorf("wrapped error: %w", err)
+		assert.ErrorIs(t, wrappedErr, err)
+	})
+
+	t.Run("Panics when the message contains verbs", func(t *testing.T) {
+		assert.Panics(t, func() {
+			_ = falta.NewError("falta test: test error: %s")
+		})
+	})
+}
+
+func TestFalta_Annotate(t *testing.T) {
+	t.Run("Appends the annotation to the message", func(t *testing.T) {
+		err := falta.NewError("falta test: test error").Annotate("because reasons")
+		assert.EqualError(t, err, "falta test: test error: because reasons")
+	})
+
+	t.Run("Panics when the annotation contains verbs", func(t *testing.T) {
+		assert.Panics(t, func() {
+			_ = falta.NewError("falta test: test error").Annotate("because %s")
+		})
+	})
+}
+
+func TestFalta_Unwrap(t *testing.T) {
+	t.Run("Returns the wrapped error", func(t *testing.T) {
+		wrappedErr := errors.New("wrapped error")
+		err := falta.NewError("falta test: test error").Wrap(wrappedErr)
+		assert.Equal(t, wrappedErr, errors.Unwrap(err))
+	})
+
+	t.Run("Returns nil when nothing is wrapped", func(t *testing.T) {
+		assert.NoError(t, errors.Unwrap(falta.NewError("falta test: test error")))
+	})
+}
+
+// TestDeepWrapping locks in that errors.Is keeps matching every layer no matter how many times an error is wrapped —
+// through falta factories wrapping other falta errors, plain fmt.Errorf %w wrapping on top, and nested Captures.
+func TestDeepWrapping(t *testing.T) {
+	t.Run("errors.Is matches every layer of a mixed chain", func(t *testing.T) {
+		root := errors.New("root cause")
+		errQuery := falta.Newf("query failed for %s")
+		errDB := falta.NewError("db: unavailable")
+
+		err := fmt.Errorf("request aborted: %w", errDB.Wrap(errQuery.New("users").Wrap(root)))
+
+		assert.ErrorIs(t, err, root)
+		assert.ErrorIs(t, err, errQuery)
+		assert.ErrorIs(t, err, errDB)
+		assert.EqualError(t, err, "request aborted: db: unavailable: query failed for users: root cause")
+
+		var f falta.Falta
+		assert.ErrorAs(t, err, &f)
+	})
+
+	t.Run("factories stay matchable through many layers of wrapping", func(t *testing.T) {
+		root := errors.New("root cause")
+		factories := make([]falta.ExtendableFactory[any], 5)
+
+		err := error(root)
+
+		for i := range factories {
+			factories[i] = falta.Newf(fmt.Sprintf("layer %d: %%s", i))
+			err = factories[i].New("ctx").Wrap(err)
+		}
+
+		assert.ErrorIs(t, err, root)
+
+		for _, factory := range factories {
+			assert.ErrorIs(t, err, factory)
+		}
+	})
+
+	t.Run("nested Captures keep the whole chain matchable", func(t *testing.T) {
+		root := errors.New("file corrupt")
+		errParse := falta.Newf("parse: cannot parse %s")
+		errLoad := falta.Newf("load: cannot load %s")
+
+		parse := func() (err error) {
+			defer errParse.New("cfg.yaml").Capture(&err)
+			return root
+		}
+
+		load := func() (err error) {
+			defer errLoad.New("app").Capture(&err)
+			return parse()
+		}
+
+		err := load()
+		assert.ErrorIs(t, err, root)
+		assert.ErrorIs(t, err, errParse)
+		assert.ErrorIs(t, err, errLoad)
+		assert.EqualError(t, err, "load: cannot load app: parse: cannot parse cfg.yaml: file corrupt")
+	})
+}
+
+// TestLiteralMessages locks in that messages are never run back through a printf interpreter at construction time:
+// NewError and the template factories build their errors with errors.New, so '%' sequences that are not caught by the
+// verb guard survive untouched. Only Newf formats, and only when arguments are passed.
+func TestLiteralMessages(t *testing.T) {
+	t.Run("NewError keeps non-verb percent sequences", func(t *testing.T) {
+		assert.EqualError(t, falta.NewError("50%% done"), "50%% done")
+		assert.EqualError(t, falta.NewError("50% done"), "50% done")
+	})
+
+	t.Run("Annotations stay literal", func(t *testing.T) {
+		err := falta.NewError("db: down").Annotate("at 50%% capacity")
+		assert.EqualError(t, err, "db: down: at 50%% capacity")
+	})
+
+	t.Run("Template factories keep percents from data", func(t *testing.T) {
+		f := falta.NewM("falta test: value {{.v}}")
+		assert.EqualError(t, f.New(falta.M{"v": "100%s"}), "falta test: value 100%s")
+	})
+
+	t.Run("Newf formats verbs when args are passed", func(t *testing.T) {
+		assert.EqualError(t, falta.Newf("%d%% done").New(50), "50% done")
+	})
 }
 
 func TestNewM(t *testing.T) {
@@ -130,34 +291,55 @@ func TestNewM(t *testing.T) {
 		"message": "Bad Gateway",
 	})
 
-	expectedErr := fmt.Errorf("falta test: [code=503] test error with message 'Bad Gateway'")
-	assert.ErrorIs(t, err, expectedErr)
+	assert.EqualError(t, err, "falta test: [code=503] test error with message 'Bad Gateway'")
+	assert.ErrorIs(t, err, f)
 }
 
 func TestExtendableFactory(t *testing.T) {
-	ErrCallFailed := falta.NewM("falta test: [code={{.code}}] test error with message '{{.message}}'")
-	ErrCallFailedWithReason := ErrCallFailed.Extend(falta.NewM("because {{.reason}}"))
+	t.Run("Extends a template factory", func(t *testing.T) {
+		errCallFailed := falta.NewM("falta test: [code={{.code}}] test error with message '{{.message}}'")
+		errCallFailedWithReason := errCallFailed.Extend(falta.NewM("because {{.reason}}"))
 
-	as := assert.New(t)
-
-	{
-		err := ErrCallFailed.New(falta.M{
+		assert.EqualError(t, errCallFailed.New(falta.M{
 			"code":    503,
 			"message": "Bad Gateway",
-		})
+		}), "falta test: [code=503] test error with message 'Bad Gateway'")
 
-		expectedErr := fmt.Errorf("falta test: [code=503] test error with message 'Bad Gateway'")
-		as.ErrorIs(err, expectedErr)
-	}
-
-	{
-		err := ErrCallFailedWithReason.New(falta.M{
+		assert.EqualError(t, errCallFailedWithReason.New(falta.M{
 			"code":    503,
 			"message": "Bad Gateway",
 			"reason":  "server is down",
+		}), "falta test: [code=503] test error with message 'Bad Gateway' because server is down")
+	})
+
+	t.Run("Extends a fmt factory", func(t *testing.T) {
+		errCallFailed := falta.Newf("falta test: [code=%d] test error")
+		errCallFailedWithReason := errCallFailed.Extend(falta.Newf("because %s"))
+
+		assert.EqualError(t, errCallFailedWithReason.New(503, "server is down"),
+			"falta test: [code=503] test error because server is down")
+	})
+
+	t.Run("Panics when factory kinds are mixed", func(t *testing.T) {
+		assert.Panics(t, func() {
+			_ = falta.NewM("{{.a}}").Extend(mFactoryStub{})
 		})
 
-		expectedErr := fmt.Errorf("falta test: [code=503] test error with message 'Bad Gateway' because server is down")
-		as.ErrorIs(err, expectedErr)
-	}
+		assert.Panics(t, func() {
+			_ = falta.Newf("%s").Extend(anyFactoryStub{})
+		})
+	})
 }
+
+// mFactoryStub is a falta.Factory[falta.M] that is not created by falta, so extending a template factory with it
+// must panic.
+type mFactoryStub struct{}
+
+func (mFactoryStub) New(...falta.M) falta.Falta { return falta.NewError("stub") }
+func (mFactoryStub) Error() string              { return "stub" }
+
+// anyFactoryStub is a falta.Factory[any] that is not created by falta, so extending a fmt factory with it must panic.
+type anyFactoryStub struct{}
+
+func (anyFactoryStub) New(...any) falta.Falta { return falta.NewError("stub") }
+func (anyFactoryStub) Error() string          { return "stub" }
