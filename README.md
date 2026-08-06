@@ -250,13 +250,32 @@ if errors.As(err, &f) {
 }
 ```
 
-Matching is by factory, not by rendered message — two errors from the same factory match each
-other, and errors from different factories never do.
+Matching is by the factory's **declaration string**, not by the data interpolated into it. Two
+errors from the same factory match no matter what arguments they were built with, and an error
+matches the factory that built it.
 
 ```go
 errors.Is(ErrUserNotFound.New(1), ErrUserNotFound.New(2)) // true
+errors.Is(ErrUserNotFound.New(1), ErrUserNotFound)        // true
 errors.Is(ErrUserNotFound.New(1), ErrStoreClosed)         // false
 ```
+
+Be aware of what that does *not* mean. Falta compares format strings and, failing that, falls
+back to comparing rendered messages — it does not compare factory instances. So two separately
+declared factories that share a format string are interchangeable, and any error whose message
+happens to equal a falta error's message will match it:
+
+```go
+a := falta.Newf("boom: %s")
+b := falta.Newf("boom: %s") // a distinct factory, identical declaration
+
+errors.Is(a.New("x"), b.New("y"))            // true  — same format string
+errors.Is(a.New("x"), errors.New("boom: x")) // true  — same rendered message
+```
+
+In practice this is rarely a problem: give each error its own message, the way you would
+anyway, and matching behaves the way you expect. It matters if you were counting on two
+same-worded errors in different packages staying distinguishable — they won't be.
 
 ## Things that will bite you
 

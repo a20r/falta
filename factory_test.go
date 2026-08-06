@@ -63,7 +63,7 @@ func TestNewf_Is(t *testing.T) {
 	as.ErrorIs(err, err)
 
 	unrelated := falta.Newf("some other error: %s")
-	as.NotErrorIs(err, unrelated.New("nope"), "errors from different factories should not match")
+	as.NotErrorIs(err, unrelated.New("nope"), "errors with different declarations should not match")
 }
 
 func TestNewf_Wrap(t *testing.T) {
@@ -154,7 +154,42 @@ func TestNewM(t *testing.T) {
 
 	as.EqualError(err, "falta test: [code=503] test error with message 'Bad Gateway'")
 	as.ErrorIs(err, factory)
-	as.ErrorIs(err, errors.New("falta test: [code=503] test error with message 'Bad Gateway'"))
+}
+
+// TestIsSemantics pins down exactly what errors.Is matches on. Falta compares the factory's
+// declaration string and falls back to comparing rendered messages; it does not compare factory
+// instances. The last two cases document that fallback — they are what the behavior *is*, not a
+// contract worth relying on. Tightening Is to compare factory identity would flip them.
+func TestIsSemantics(t *testing.T) {
+	as := assert.New(t)
+
+	a := falta.Newf("boom: %s")
+	b := falta.Newf("boom: %s")  // a distinct factory with an identical declaration
+	c := falta.Newf("other: %s") // a distinct factory with a different declaration
+
+	t.Run("same factory, different data", func(t *testing.T) {
+		as.ErrorIs(a.New("x"), a.New("y"))
+	})
+
+	t.Run("error matches its factory", func(t *testing.T) {
+		as.ErrorIs(a.New("x"), a)
+		as.ErrorIs(a, a.New("x"))
+	})
+
+	t.Run("different declaration does not match", func(t *testing.T) {
+		as.NotErrorIs(a.New("x"), c.New("x"))
+		as.NotErrorIs(a.New("x"), c)
+	})
+
+	t.Run("identical declarations are interchangeable", func(t *testing.T) {
+		as.ErrorIs(a.New("x"), b.New("y"), "matching is by declaration string, not factory identity")
+		as.ErrorIs(a.New("x"), b)
+	})
+
+	t.Run("equal rendered message matches", func(t *testing.T) {
+		as.ErrorIs(a.New("x"), errors.New("boom: x"), "Is falls back to comparing messages")
+		as.NotErrorIs(a.New("x"), errors.New("unrelated"))
+	})
 }
 
 func TestNewError(t *testing.T) {
