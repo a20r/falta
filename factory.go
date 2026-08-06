@@ -35,7 +35,7 @@ func NewError(msg string) Falta {
 
 	return Falta{
 		errFmt: msg,
-		error:  fmt.Errorf(msg),
+		error:  errors.New(msg),
 	}
 }
 
@@ -77,25 +77,14 @@ func (f Falta) Is(err error) bool {
 // Capture captures the error provided and wraps it with the Falta instance if it's not nil. This should be called
 // with defer at the top of the function for which you are trying to capture the error. This ensures that all errors
 // returned from your function will be wrapped by the function passed into Capture. You should use a named return
-// value for the error so that the error Capture wraps is the one returned from teh function.
+// value for the error so that the error Capture wraps is the one returned from the function.
 func (f Falta) Capture(err *error) {
 	if *err != nil {
 		*err = f.Wrap(*err)
 	}
 }
 
-var verbsRegex *regexp.Regexp
-
-func init() {
-	const verbsRegexStr = `\%\w`
-	re, err := regexp.Compile(verbsRegexStr)
-
-	if err != nil {
-		panic(fmt.Errorf("falta: cannot compile verbs regex: %w", err))
-	}
-
-	verbsRegex = re
-}
+var verbsRegex = regexp.MustCompile(`\%\w`)
 
 func panicIfStringHasVerbs(msg string) {
 	if verbsRegex.MatchString(msg) {
@@ -148,7 +137,7 @@ func (f tmplFalta[T]) New(vs ...T) Falta {
 		panic(fmt.Errorf("falta: cannot execute template: %w", err))
 	}
 
-	return Falta{errFmt: f.errFmt, error: fmt.Errorf(builder.String())}
+	return Falta{errFmt: f.errFmt, error: errors.New(builder.String())}
 }
 
 func (f tmplFalta[T]) Extend(other Factory[T]) ExtendableFactory[T] {
