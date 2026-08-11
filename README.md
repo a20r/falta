@@ -280,10 +280,14 @@ same-worded errors in different packages staying distinguishable — they won't 
 ## Things that will bite you
 
 - **`NewError` and `Annotate` panic on format verbs.** Both take literal strings, so a stray
-  `%s` is a bug — falta reports it loudly at init time rather than emitting `%!s(MISSING)`
-  into your logs.
-- **`falta.New[T]` panics on an invalid template.** Also at init time, by design: a broken
-  error message should not first surface during an incident.
+  `%s` is a bug — falta reports it loudly (`NewError` at declaration, `Annotate` at the call
+  site) rather than emitting `%!s(MISSING)` into your logs. A bare `%`, as in `100% full`,
+  is fine.
+- **`falta.New[T]` panics on a bad template — sometimes at call time.** A template that
+  doesn't parse panics at declaration, by design: a broken error message should not first
+  surface during an incident. But a template that parses and references a field the value
+  doesn't have (`{{.Missing}}`) only panics when `New` runs it. `NewM` is looser still: a
+  missing map key renders as `<no value>` instead of failing.
 - **Calling `New()` with no arguments returns the raw format string** as the error message.
   That's the intended behavior for `NewError`-style use of a factory, but it means a forgotten
   argument shows up as a literal `%s` or `{{.Field}}` rather than a compile error.
