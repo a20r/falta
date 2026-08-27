@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g. v0.7.1)'
+        required: true
+        type: string
+      target:
+        description: 'Commit to tag, when the tag does not exist yet'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create GitHub release named after the tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          if [ -n "$TARGET" ]; then
+            gh release create "$TAG" --target "$TARGET" --title "$TAG" --generate-notes
+          else
+            gh release create "$TAG" --verify-tag --title "$TAG" --generate-notes
+          fi
